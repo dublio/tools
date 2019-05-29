@@ -73,7 +73,7 @@ int main(int argc, char **argv)
                 }
 
                 util = (float)(u - last_u) * 100 / (float)delta_t;
-                printf("%s.%03lu: %.2f\n", buf, t.tv_nsec/1000000, util);
+                printf("%s.%03lu: %.2f%%\n", buf, t.tv_nsec/1000000, util);
 
 next:
                 last_u = u;
