@@ -49,7 +49,7 @@ function parse_bw_iops_lat_mean_p99()
 	# 71 write_lat_pct13: 99.000000%=0
 	local write_lat_p99=`awk -F ";" '{print $71}' $file | awk -F = '{print $2}'`
 
-	local test_case=`echo $file | sed 's#./##' | sed 's/.log//' | sed 's/_0[0-9]_/_/'`
+	local test_case=`basename $file | sed 's/.log//' | sed 's/_0[0-9]_/_/'`
 	#printf "%-40s %10d %10d %10.2f %10.2f\n" $file $bw $iops $read_lat_mean $write_lat_mean
 	printf "%-40s %-10d %-10d %-12.2f %-12.2f %-12.2f %-12.2f\n" $test_case $bw $iops $read_lat_mean $write_lat_mean $read_lat_p99 $write_lat_p99
 }
