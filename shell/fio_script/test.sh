@@ -186,6 +186,9 @@ function main()
 
 	$sched
 
+	# disable merge
+	echo 1 > /sys/block/$g_disk/queue/nomerges
+
 	g_test1="$ROOT/${test}.sh $threads $depth"
 	g_test2="$ROOT/${test}.sh $threads $depth"
 
