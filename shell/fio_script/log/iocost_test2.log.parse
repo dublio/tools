@@ -1,0 +1,2 @@
+test case                                bw         iops       rd_avg_lat   wr_avg_lat   rd_p99_lat   wr_p99_lat  
+loiocost_test2                           1399761    349940     730.83       0.00         1712.00      0.00        
