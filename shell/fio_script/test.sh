@@ -8,7 +8,7 @@ WEIGHT_NONE="none"
 # default test setting
 g_policy=none
 g_test=rr
-g_numjobs=8
+g_num_jobs=8
 g_iodepth=32
 g_cgroup_ver=v2
 
@@ -224,11 +224,14 @@ function parse_args()
 		shift
 	done
 
-	echo "plicy:$g_policy"
-	echo "test case:$g_test"
-	echo "num_jobs:$g_g_num_jobs"
-	echo "io depth: $g_iodepth"
-	echo "cgroup version: $g_cgroup_ver"
+	date
+	echo "============================================================"
+	echo "isolation policy: $g_policy"
+	echo "test case:        $g_test"
+	echo "fio num_jobs:     $g_num_jobs"
+	echo "fio io depth:     $g_iodepth"
+	echo "cgroup version:   $g_cgroup_ver"
+	echo "============================================================"
 }
 
 function main()
