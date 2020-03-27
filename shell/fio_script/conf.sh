@@ -5,11 +5,13 @@ cd $root
 mkdir -p $root/log
 
 if [ -z $test_file_size ]; then
-export test_file_size=100%
+#export test_file_size=100%
+export test_file_size=10G
 fi
 
 if [ -z $test_file_name ]; then
-export test_file_name=/dev/nvme1n1
+#export test_file_name=/dev/nvme1n1
+export test_file_name=fio.test.file
 fi
 
 if [ -z $test_time ]; then
