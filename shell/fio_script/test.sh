@@ -3,6 +3,8 @@ ROOT=$(cd `dirname $0` && pwd -P)
 cd $ROOT
 source $ROOT/conf.sh
 
+set -e
+
 WEIGHT_NONE="none"
 
 # default test setting
