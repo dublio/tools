@@ -247,7 +247,7 @@ function main()
 	if [ x$g_cgroup_ver == xv2 ]; then
 		enable_cgroup_v2
 	else
-		disale_cgroup_v2
+		disable_cgroup_v2
 	fi
 
 	#bfq #iocost #wrr #node
