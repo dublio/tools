@@ -217,6 +217,7 @@ function parse_args()
 		"-j") g_num_jobs=$2; shift;; # --num_jobs for fio arguments
 		"-d") g_iodepth=$2; shift;; # --iodepth for fio arguments
 		"-g") g_cgroup_ver=$2; shift;; # cgroup version: v1 or v2
+		"-h") usage;;
 		*) usage;
 		esac
 
