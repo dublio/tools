@@ -5,6 +5,13 @@ source $ROOT/conf.sh
 
 WEIGHT_NONE="none"
 
+# default test setting
+g_policy=none
+g_test=rr
+g_numjobs=8
+g_iodepth=32
+g_cgroup_ver=v2
+
 # align with test_file_name
 function get_disk_name_by_test_file()
 {
@@ -56,7 +63,7 @@ function diable_cgroup_v2()
 }
 
 # scheduler name
-function config_scheduler()
+function config_policy()
 {
 	local sched=$1
 	local val=none
@@ -139,14 +146,14 @@ function run_test()
 
 function bfq()
 {
-	config_scheduler bfq
+	config_policy bfq
 	g_weight1=800
 	g_weight2=100
 }
 
 function iocost()
 {
-	config_scheduler iocost
+	config_policy iocost
 	g_weight1=800
 	g_weight2=100
 }
@@ -161,56 +168,96 @@ function wrr()
 
 	nvme set-feature /dev/$g_disk -f 1 -v `printf "0x%x\n" $(($ab<<0|$l<<8|$m<<16|$h<<24))`
 
-	config_scheduler wrr
+	config_policy wrr
 	g_weight1="$dev high"
 	g_weight2="$dev low"
 }
 
 function none()
 {
-	config_scheduler none
+	config_policy none
 	g_weight1="$WEIGHT_NONE"
 	g_weight2="$WEIGHT_NONE"
 }
 
+function usage()
+{
+cat << EOF
+	Usage: $g_app -p policy -t test_case -j fio_jobs -d iodepth [-g cgroup_versoin]
+
+	-p policy: scheduler can be "none" "iocost" "bfq" "wrr"
+
+	-t test_case: rr, rw, sr or sw. rr=randread, rw=randwrite, sr=read, sw=write
+
+	-j fio_jobs: --num_jobs for fio arguments
+
+	-d iodepth: --iodepth for fio arguments
+
+	-g cgroup_version: v1 or v2, default on cgroup v2
+
+
+	Example:
+
+		sh test.sh -p none -t rr -j 8 -d 32
+
+		# test on cgroup v1
+		sh test.sh -p none -t rr -j 8 -d 32 -g v1
+EOF
+
+	exit
+}
+
+function parse_args()
+{
+	while [ $# -gt 0 ];
+	do
+		case $1 in
+		"-p") g_policy=$2; shift;; # set policy: iocost, bfq, wrr, none
+		"-t") g_test=$2; shift;; # set test case: rr, rw, sr, sw. rr=randread, sw=write
+		"-j") g_num_jobs=$2; shift;; # --num_jobs for fio arguments
+		"-d") g_iodepth=$2; shift;; # --iodepth for fio arguments
+		"-g") g_cgroup_ver=$2; shift;; # cgroup version: v1 or v2
+		*) usage;
+		esac
+
+		shift
+	done
+
+	echo "plicy:$g_policy"
+	echo "test case:$g_test"
+	echo "num_jobs:$g_g_num_jobs"
+	echo "io depth: $g_iodepth"
+	echo "cgroup version: $g_cgroup_ver"
+}
+
 function main()
 {
-	local sched=$1
-	local test=$2
-	local threads=$3
-	local depth=$4
+	g_app=$0
 
-	if [ $# -lt 4 ]; then
-		echo "Please give sched, test, threads, io depth"
-		echo "Arg1: none, iocost, bfq, wrr"
-		echo "Arg2: rr,rw,sr,sw. rr=randread, rw=randwrite, sr=read, sw=write"
-		echo "Arg3: numjobs for fio"
-		echo "Arg4: iodepth for fio"
-		echo "example: sh test.sh none rr 8 32"
-		exit
-	fi
+	parse_args $@
 
 	echo "Test start ..."
-	echo "scheduler:$sched, test:$test, thread_nr:$threads, io depth: $depth"
 	get_disk_name_by_test_file
 
-	enable_cgroup_v2
+	# cgroup v1 or v2
+	if [ x$g_cgroup_ver == xv2 ]; then
+		enable_cgroup_v2
+	else
+		disale_cgroup_v2
+	fi
 
-	#bfq
-	#iocost
-	#wrr
-
-	$sched
+	#bfq #iocost #wrr #node
+	$g_policy
 
 	# disable merge
 	echo 1 > /sys/block/$g_disk/queue/nomerges
 
-	g_test1="$ROOT/${test}.sh $threads $depth"
-	g_test2="$ROOT/${test}.sh $threads $depth"
+	g_test1="$ROOT/${g_test}.sh $g_num_jobs $g_iodepth"
+	g_test2="$ROOT/${g_test}.sh $g_num_jobs $g_iodepth"
 
-	run_test "$g_test1" test1 "$g_weight1" ${sched}_test1 &
+	run_test "$g_test1" test1 "$g_weight1" ${g_policy}_test1 &
 	#sleep 30
-	run_test "$g_test2" test2 "$g_weight2" ${sched}_test2 &
+	run_test "$g_test2" test2 "$g_weight2" ${g_policy}_test2 &
 
 	wait
 
