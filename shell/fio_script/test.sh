@@ -84,7 +84,7 @@ function config_policy()
 	echo $val > /sys/block/$g_disk/queue/scheduler
 }
 
-function reset_all()
+function reset_cgroup()
 {
 	local path=$1
 	local file val
@@ -126,7 +126,7 @@ function run_test()
 
 	mkdir -p $path
 
-	reset_all $path
+	reset_cgroup $path
 
 	export test_logfile=$out
 
