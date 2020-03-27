@@ -34,12 +34,12 @@ function config_cgroup_v2()
 		g_cg_prefix=/sys/fs/cgroup/blkio
 		g_bfq_weight_file=blkio.bfq.weight
 		g_ioc_weight_file=""
-		g_wrr_file=blkio.wrr
+		g_wrr_weight_file=blkio.wrr
 	else
 		g_cg_prefix=/sys/fs/cgroup
 		g_bfq_weight_file=io.bfq.weight
 		g_ioc_weight_file=io.weight
-		g_wrr_file=io.wrr
+		g_wrr_weight_file=io.wrr
 	fi
 
 }
@@ -66,7 +66,7 @@ function config_scheduler()
 	elif [ x$sched == xiocost ]; then
 		g_weight_file=$g_ioc_weight_file
 	else
-		g_weight_file=$g_wrr_file
+		g_weight_file=$g_wrr_weight_file
 	fi
 
 	echo $val > /sys/block/$g_disk/queue/scheduler
@@ -79,7 +79,7 @@ function reset_all()
 	local dev=`cat /sys/block/$g_disk/dev`
 
 	# reset wrr
-	file=$path/$g_wrr_file
+	file=$path/$g_wrr_weight_file
 	val="$dev none"
 	echo $val > $file
 	echo "reset $val > $file"
