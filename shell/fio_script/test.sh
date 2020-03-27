@@ -182,7 +182,10 @@ function main()
 
 	if [ $# -lt 4 ]; then
 		echo "Please give sched, test, threads, io depth"
-		echo "The second arguments support: none, iocost, bfq, wrr"
+		echo "Arg1: none, iocost, bfq, wrr"
+		echo "Arg2: rr,rw,sr,sw. rr=randread, rw=randwrite, sr=read, sw=write"
+		echo "Arg3: numjobs for fio"
+		echo "Arg4: iodepth for fio"
 		echo "example: sh test.sh none rr 8 32"
 		exit
 	fi
