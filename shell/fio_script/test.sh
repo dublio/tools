@@ -3,6 +3,7 @@ ROOT=$(cd `dirname $0` && pwd -P)
 cd $ROOT
 source $ROOT/conf.sh
 
+WEIGHT_NONE="none"
 
 # align with test_file_name
 function get_disk_name_by_test_file()
@@ -65,8 +66,10 @@ function config_scheduler()
 		val=bfq
 	elif [ x$sched == xiocost ]; then
 		g_weight_file=$g_ioc_weight_file
-	else
+	elif [ x$sched == xwrr ]; then
 		g_weight_file=$g_wrr_weight_file
+	else
+		g_weight_file=$WEIGHT_NONE
 	fi
 
 	echo $val > /sys/block/$g_disk/queue/scheduler
@@ -124,10 +127,12 @@ function run_test()
 	echo $val > $file
 	echo "$pid > $file"
 
-	file=$path/$g_weight_file
-	val=$wt
-	echo $val > $file
-	echo "$val > $file"
+	if [ ! x"$g_weight_file" == x"$WEIGHT_NONE" ]; then
+		file=$path/$g_weight_file
+		val=$wt
+		echo $val > $file
+		echo "$val > $file"
+	fi
 	$test
 }
 
@@ -159,6 +164,13 @@ function wrr()
 	config_scheduler wrr
 	g_weight1="$dev high"
 	g_weight2="$dev low"
+}
+
+function none()
+{
+	config_scheduler none
+	g_weight1="$WEIGHT_NONE"
+	g_weight2="$WEIGHT_NONE"
 }
 
 function main()
