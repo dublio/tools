@@ -1,2 +1,0 @@
-test case                                bw         iops       rd_avg_lat   wr_avg_lat   rd_p99_lat   wr_p99_lat  
-wrr_test2                              362613     90653      2822.62      0.00         4358.00      0.00        
