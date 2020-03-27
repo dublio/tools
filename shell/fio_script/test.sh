@@ -135,14 +135,14 @@ function run_test()
 function bfq()
 {
 	config_scheduler bfq
-	g_weight1=400
+	g_weight1=800
 	g_weight2=100
 }
 
 function iocost()
 {
 	config_scheduler iocost
-	g_weight1=400
+	g_weight1=800
 	g_weight2=100
 }
 
