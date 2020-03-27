@@ -182,7 +182,8 @@ function main()
 
 	if [ $# -lt 4 ]; then
 		echo "Please give sched, test, threads, io depth"
-		echo "test.sh bfq rr 8 32"
+		echo "The second arguments support: none, iocost, bfq, wrr"
+		echo "example: sh test.sh none rr 8 32"
 		exit
 	fi
 
