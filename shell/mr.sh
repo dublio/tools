@@ -25,7 +25,7 @@ touch $LOG_FILE
 
 function log()
 {
-	echo "`date '+%F %T'` $@" 2>&1 | tee -a $LOG_FILE
+	echo "[`date '+%F %T'`] $@" 2>&1 | tee -a $LOG_FILE
 }
 
 function set_def_kernel()
