@@ -52,7 +52,8 @@ function set_def_kernel()
 
 	local ks=`grubby --info ALL | egrep "^index|^kernel" | awk '{if (0==NR%2) {print $0} else {printf("%s ", $0);}}'`
 
-	echo "$ks"
+	# debug only, show all "index=xxx kernel=xxx
+	#echo "$ks"
 	local nr index kernel
 	nr=`echo "$ks"| grep -c $KERNELVERSION`
 	if [ $nr -lt 1 ]; then
