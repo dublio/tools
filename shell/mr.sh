@@ -60,11 +60,14 @@ function set_def_kernel()
 		exit
 	fi
 	if [ $nr -gt 1 ]; then
-		log "Found ($nr) matched items:"
+		local tmp_index
+		log "Found ($nr) matched items for $KERNELVERSION"
 		echo "$ks"| grep $KERNELVERSION
-		exit
+		read -p "Please input the number: " tmp_index
+		eval `echo "$ks"| grep "index=$tmp_index"`
+	else
+		eval `echo "$ks"| grep $KERNELVERSION`
 	fi
-	eval `echo "$ks"| grep $KERNELVERSION`
 	log "select $index $kernel"
 
 	# set default kernel for grub
