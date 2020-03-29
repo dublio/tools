@@ -34,7 +34,7 @@ function set_def_kernel()
 	grub2-mkconfig -o /boot/grub2/grub.cfg 2>&1 | tee -a $LOG_FILE
 
 	# generate kernel version from Makefile
-	eval `grep -E "^VERSION|^PATCHLEVEL|^SUBLEVEL|^EXTRAVERSION" Makefile | sed 's/ = /=/'`
+	eval `grep -E "^VERSION|^PATCHLEVEL|^SUBLEVEL|^EXTRAVERSION" Makefile | sed 's/ //g'`
 	KERNELVERSION=$VERSION
 	if [ -n "$PATCHLEVEL" ]; then
 		KERNELVERSION+=".$PATCHLEVEL"
