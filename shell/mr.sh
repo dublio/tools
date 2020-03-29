@@ -63,7 +63,7 @@ function set_def_kernel()
 		local tmp_index
 		log "Found ($nr) matched items for $KERNELVERSION"
 		echo "$ks"| grep $KERNELVERSION
-		read -p "Please input the number: " tmp_index
+		read -p "Please input the index number: " tmp_index
 		eval `echo "$ks"| grep "index=$tmp_index"`
 	else
 		eval `echo "$ks"| grep $KERNELVERSION`
