@@ -59,7 +59,7 @@ function enable_cgroup_v2()
 	config_cgroup_v2 1
 }
 
-function diable_cgroup_v2()
+function disable_cgroup_v2()
 {
 	config_cgroup_v2 0
 }
@@ -92,21 +92,31 @@ function reset_cgroup()
 
 	# reset wrr
 	file=$path/$g_wrr_weight_file
-	val="$dev none"
-	echo $val > $file
-	echo "reset $val > $file"
+	if [ -e $file ]; then
+		val="$dev none"
+		echo $val > $file
+		echo "reset $val > $file"
+	fi
 
 	# reset iocost
-	file=$path/$g_ioc_weight_file
-	val=100
-	echo "$val" > $file
-	echo "reset $val > $file"
+	if [ -n "$g_ioc_weight_file" ];then
+		file=$path/$g_ioc_weight_file
+		if [ -e $file ]; then
+			val=100
+			echo "$val" > $file
+			echo "reset $val > $file"
+		fi
+	fi
 
 	# reset bfq
-	file=$path/$g_bfq_weight_file
-	val=100
-	echo "$val" > $file
-	echo "reset $val > $file"
+	if [ -n "$g_bfq_weight_file" ];then
+		file=$path/$g_bfq_weight_file
+		if [ -e $file ]; then
+			val=100
+			echo "$val" > $file
+			echo "reset $val > $file"
+		fi
+	fi
 }
 
 # $1: script to run
