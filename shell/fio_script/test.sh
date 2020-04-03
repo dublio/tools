@@ -113,7 +113,7 @@ function config_policy()
 		local l_disk=${g_all_disk[$i]}
 		local file=/sys/block/$l_disk/queue/scheduler
 		# change scheduler
-		write_file $file $val
+		write_file $file "$val"
 		# disable merge
 		# file=/sys/block/$l_disk/queue/nomerges
 		# write_file $file 1
@@ -151,10 +151,10 @@ function config_weight()
 		do
 			local l_disk=${g_all_disk[$i]}
 			local val="`cat /sys/block/$l_disk/dev` $wt"
-			write_file $file $val
+			write_file $file "$val"
 		done
 	else
-		write_file $file $wt
+		write_file $file "$wt"
 	fi
 }
 
