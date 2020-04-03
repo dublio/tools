@@ -115,8 +115,8 @@ function config_policy()
 		# change scheduler
 		write_file $file $val
 		# disable merge
-		file=/sys/block/$l_disk/queue/nomerges
-		write_file $file 1
+		# file=/sys/block/$l_disk/queue/nomerges
+		# write_file $file 1
 	done
 }
 
