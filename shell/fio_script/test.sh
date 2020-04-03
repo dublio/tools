@@ -5,17 +5,54 @@ source $ROOT/conf.sh
 
 set -e
 
-WEIGHT_NONE="none"
-
 # default test setting
 g_policy=none
 g_test=rr
 g_num_jobs=8
 g_iodepth=32
-g_cgroup_ver=v2
+g_cgroup_ver=v1
+#g_cgroup_ver=v2
+
+g_all_policy="none bfq iocost wrr"
+g_all_test="rr rw sr sw"
+
+function log()
+{
+	local func=${FUNCNAME[1]}
+	local pid=`sh -c 'echo $PPID'`
+	echo "[$pid] $func $@"
+}
+
+# $1: file
+# $2: val
+function write_file()
+{
+	local file=$1
+	local val=$2
+	local func=${FUNCNAME[1]}
+	local pid=`sh -c 'echo $PPID'`
+	echo "[$pid] $func echo $val > $file"
+	echo $val > $file
+}
+
+# $1: disk name
+function get_all_slave_disk()
+{
+	local l_disk=$1
+
+	# have slaves?
+	local slaves=`ls /sys/block/$l_disk/slaves`
+	local s
+	for s in $slaves
+	do
+		g_all_disk[$g_disk_nr]=$s
+		let g_disk_nr++
+		get_all_slave_disk $s
+	done
+}
 
 # align with test_file_name
-function get_disk_name_by_test_file()
+function get_all_disk_name_by_test_file()
 {
 	local path_name
 	# a block device ?
@@ -32,15 +69,23 @@ function get_disk_name_by_test_file()
 	# get the last field seperated by /
 	g_disk=${path_name##*/}
 
-	echo "g_disk: $g_disk"
+	g_all_disk[0]=$g_disk
+	g_disk_nr=1
+
+	get_all_slave_disk $g_disk
+
+	echo "All disks realated to test file: $test_file_name"
+	local i
+	for ((i=0;i<$g_disk_nr;i++))
+	do
+		echo "disk[$i]: ${g_all_disk[$i]}"
+	done
 }
 
 # $1: 0 disable v2 ,1 enable v2
-function config_cgroup_v2()
+function config_cgroup_version()
 {
-	g_cgroup_v2=$1
-
-	if [ $g_cgroup_v2 -eq 0 ]; then
+	if [ x$g_cgroup_ver == xv1 ]; then
 		g_cg_prefix=/sys/fs/cgroup/blkio
 		g_bfq_weight_file=blkio.bfq.weight
 		g_ioc_weight_file=""
@@ -54,57 +99,86 @@ function config_cgroup_v2()
 
 }
 
-function enable_cgroup_v2()
-{
-	config_cgroup_v2 1
-}
-
-function disable_cgroup_v2()
-{
-	config_cgroup_v2 0
-}
-
-# scheduler name
 function config_policy()
 {
-	local sched=$1
 	local val=none
 
-	if [ x$sched == xbfq ]; then
-		g_weight_file=$g_bfq_weight_file
+	if [ x$g_policy == xbfq ]; then
 		val=bfq
-	elif [ x$sched == xiocost ]; then
-		g_weight_file=$g_ioc_weight_file
-	elif [ x$sched == xwrr ]; then
-		g_weight_file=$g_wrr_weight_file
-	else
-		g_weight_file=$WEIGHT_NONE
 	fi
 
-	echo $val > /sys/block/$g_disk/queue/scheduler
+	local i
+	for ((i=0;i<$g_disk_nr;i++))
+	do
+		local l_disk=${g_all_disk[$i]}
+		local file=/sys/block/$l_disk/queue/scheduler
+		# change scheduler
+		write_file $file $val
+		# disable merge
+		file=/sys/block/$l_disk/queue/nomerges
+		write_file $file 1
+	done
 }
 
-function reset_cgroup()
+# $1: cgroup
+# $2: weight
+function config_weight()
 {
-	local path=$1
-	local file val
-	local dev=`cat /sys/block/$g_disk/dev`
-
-	# reset wrr
-	file=$path/$g_wrr_weight_file
-	if [ -e $file ]; then
-		val="$dev none"
-		echo $val > $file
-		echo "reset $val > $file"
+	if [ x$g_policy == xbfq ]; then
+		g_weight_file=$g_bfq_weight_file
+	elif [ x$g_policy == xiocost ]; then
+		g_weight_file=$g_ioc_weight_file
+	elif [ x$g_policy == xwrr ]; then
+		g_weight_file=$g_wrr_weight_file
+	else
+		g_weight_file=""
+		return
 	fi
+
+	if [ -z $g_weight_file ]; then
+		log "g_weith_file is null, exit"
+		exit
+	fi
+
+	local path=$1
+	local wt=$2
+	local file=$path/$g_weight_file
+
+
+	if [ x$g_policy == xwrr ]; then
+		local i
+		for ((i=0;i<$g_disk_nr;i++))
+		do
+			local l_disk=${g_all_disk[$i]}
+			local val="`cat /sys/block/$l_disk/dev` $wt"
+			write_file $file $val
+		done
+	else
+		write_file $file $wt
+	fi
+}
+
+function reset_cgroup() {
+	local path=$1
+	local file val i 
+	# reset wrr
+	for ((i=0;i<$g_disk_nr;i++))
+	do
+		local l_disk=${g_all_disk[$i]}
+		local val="`cat /sys/block/$l_disk/dev` none"
+
+		file=$path/$g_wrr_weight_file
+		if [ -e $file ]; then
+			write_file $file "$val"
+		fi
+	done
 
 	# reset iocost
 	if [ -n "$g_ioc_weight_file" ];then
 		file=$path/$g_ioc_weight_file
 		if [ -e $file ]; then
 			val=100
-			echo "$val" > $file
-			echo "reset $val > $file"
+			write_file $file "$val"
 		fi
 	fi
 
@@ -113,8 +187,7 @@ function reset_cgroup()
 		file=$path/$g_bfq_weight_file
 		if [ -e $file ]; then
 			val=100
-			echo "$val" > $file
-			echo "reset $val > $file"
+			write_file $file "$val"
 		fi
 	fi
 }
@@ -127,7 +200,7 @@ function run_test()
 {
 	local test=$1
 	local cg=$2
-	local wt="$3"
+	local wt=$3
 	local out=$4
 	local pid=`sh -c 'echo $PPID'`
 	local path=$g_cg_prefix/$cg
@@ -141,55 +214,32 @@ function run_test()
 	export test_logfile=$out
 
 	file=$path/cgroup.procs
-	val=$pid
+	write_file $file $pid
 
-	echo $val > $file
-	echo "$pid > $file"
+	config_weight $path $wt
 
-	if [ ! x"$g_weight_file" == x"$WEIGHT_NONE" ]; then
-		file=$path/$g_weight_file
-		val=$wt
-		echo $val > $file
-		echo "$val > $file"
-	fi
 	$test
 }
 
-
-function bfq()
+function config_weight_wrr()
 {
-	config_policy bfq
-	g_weight1=800
-	g_weight2=100
-}
-
-function iocost()
-{
-	config_policy iocost
-	g_weight1=800
-	g_weight2=100
-}
-
-function wrr()
-{
-	local h=64
-	local m=32
-	local l=8
+	#local h=64
+	#local m=32
+	#local l=8
+	local h=$1
+	local m=$2
+	local l=$3
 	local ab=0
-	local dev=`cat /sys/block/$g_disk/dev`
 
-	nvme set-feature /dev/$g_disk -f 1 -v `printf "0x%x\n" $(($ab<<0|$l<<8|$m<<16|$h<<24))`
-
-	config_policy wrr
-	g_weight1="$dev high"
-	g_weight2="$dev low"
-}
-
-function none()
-{
-	config_policy none
-	g_weight1="$WEIGHT_NONE"
-	g_weight2="$WEIGHT_NONE"
+	for ((i=0;i<$g_disk_nr;i++))
+	do
+		local l_disk=${g_all_disk[$i]}
+		if [[ "$l_disk" == nvme* ]]; then
+			local val=`printf "0x%x\n" $(($ab<<0|$l<<8|$m<<16|$h<<24))`
+			nvme set-feature /dev/$l_disk -f 1 -v $val
+			log "nvme set-feature /dev/$l_disk -f 1 -v $val"
+		fi
+	done
 }
 
 function usage()
@@ -221,6 +271,7 @@ EOF
 
 function parse_args()
 {
+	local false_arg
 	while [ $# -gt 0 ];
 	do
 		case $1 in
@@ -235,6 +286,37 @@ function parse_args()
 
 		shift
 	done
+
+	# check policy
+	false_arg=1
+	local t
+	for t in $g_all_policy
+	do
+		if [ x$t == x$g_policy ]; then
+			false_arg=0
+			break
+		fi
+	done
+
+	if [ $false_arg -eq 1 ]; then
+		log "wrong policy ($g_policy), exit"
+		exit
+	fi
+
+	false_arg=1
+	local t
+	for t in $g_all_test
+	do
+		if [ x$t == x$g_test ]; then
+			false_arg=0
+			break
+		fi
+	done
+
+	if [ $false_arg -eq 1 ]; then
+		log "wrong test ($g_test), exit"
+		exit
+	fi
 
 	date
 	echo "============================================================"
@@ -253,27 +335,33 @@ function main()
 	parse_args $@
 
 	echo "Test start ..."
-	get_disk_name_by_test_file
+	get_all_disk_name_by_test_file
 
 	# cgroup v1 or v2
-	if [ x$g_cgroup_ver == xv2 ]; then
-		enable_cgroup_v2
-	else
-		disable_cgroup_v2
-	fi
+	config_cgroup_version
 
-	#bfq #iocost #wrr #node
-	$g_policy
+	config_policy
 
-	# disable merge
-	echo 1 > /sys/block/$g_disk/queue/nomerges
 
 	g_test1="$ROOT/${g_test}.sh $g_num_jobs $g_iodepth"
 	g_test2="$ROOT/${g_test}.sh $g_num_jobs $g_iodepth"
 
-	run_test "$g_test1" test1 "$g_weight1" ${g_policy}_test1 &
+	g_weight1=800
+	g_weight2=100
+
+	if [ x$g_policy == xwrr ]; then
+		g_weight1=64
+		g_weight2=8
+		config_weight_wrr $g_weight1 32 $g_weight2
+
+		# wrapper to nvme wrr
+		g_weight1="high"
+		g_weight2="low"
+	fi
+
+	run_test "$g_test1" test1 $g_weight1 ${g_policy}_test1 &
 	#sleep 30
-	run_test "$g_test2" test2 "$g_weight2" ${g_policy}_test2 &
+	run_test "$g_test2" test2 $g_weight2 ${g_policy}_test2 &
 
 	wait
 
