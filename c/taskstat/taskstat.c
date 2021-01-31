@@ -24,12 +24,14 @@
 
 LIST_HEAD(g_list);
 
+/* use netlink mode by default */
+int g_netlink = 1;
+
 int g_index;
 int g_loop;
 char g_ts[64];
 int g_interval_ms = 1000;
 unsigned int g_nr_pid;
-
 
 static inline unsigned long long
 timespec_delta_ns(struct timespec t1, struct timespec t2)
@@ -262,7 +264,10 @@ static void pid_track_deinit(void)
 static inline int pid_track_read_data_pid(struct pid_track *pt)
 {
 	/* read taskstats by netlink socket */
-	return pid_track_get_delay_netlink(pt);
+	if (g_netlink)
+		return pid_track_get_delay_netlink(pt);
+
+	return pid_track_get_delay_ioctl(pt);
 }
 
 static int pid_track_read_data(void)
@@ -279,17 +284,25 @@ static int pid_track_read_data(void)
 
 static void usage(void)
 {
-	fprintf(stderr, "taskstat process-name\n");
+	fprintf(stderr, "taskstat 0|1 process-name\n");
+	fprintf(stderr, "ioctl mode  : taskstat 0 process-name\n");
+	fprintf(stderr, "netlink mode: taskstat 1 process-name\n");
 }
 
 static int pid_lat_init(void)
 {
-	return pid_lat_init_netlink();
+	if (g_netlink)
+		return pid_lat_init_netlink();
+
+	return pid_lat_init_ioctl();
 }
 
 static void pid_lat_deinit(void)
 {
-	pid_lat_deinit_netlink();
+	if (g_netlink)
+		pid_lat_deinit_netlink();
+	else
+		pid_lat_deinit_ioctl();
 }
 
 
@@ -300,12 +313,15 @@ int main(int argc, char **argv)
 	unsigned long long run_ns, interval_ns;
 	struct timeval t_sleep;
 
-	if (argc != 2) {
+	if (argc != 3) {
 		usage();
 		return -1;
 	}
 
-	if (pid_track_init(argv[1])) {
+	/* switch to ioctl mode */
+	g_netlink = atoi(argv[1]);
+
+	if (pid_track_init(argv[2])) {
 		fprintf(stderr, "failed to init pids\n");
 		goto cleanup;
 	}
@@ -327,6 +343,8 @@ int main(int argc, char **argv)
 		if (pid_track_read_data())
 			goto cleanup;
 
+		/* swith index of array */
+		g_index = 1 - g_index;
 
 		if (g_loop == 0)
 			goto sleep;
@@ -334,6 +352,8 @@ sleep:
 		clock_gettime(CLOCK_MONOTONIC, &ts_end);
 		run_ns = timespec_delta_ns(ts_start, ts_end);
 		printf("nr_process: %-6d cost: %3d.%09d\n", g_nr_pid, run_ns / 1000000000, run_ns % 1000000000);
+
+		/* calculate the sleep time */
 		sleep_us = (long)(interval_ns - run_ns) / 1000;
 		t_sleep.tv_sec = sleep_us / 1000000L;
 		t_sleep.tv_usec = sleep_us % 1000000L;

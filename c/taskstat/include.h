@@ -42,4 +42,7 @@ extern int pid_lat_init_netlink(void);
 extern int pid_track_get_delay_netlink(struct pid_track *pt);
 
 /* ioctl mode */
+extern void pid_lat_deinit_ioctl(void);
+extern int pid_lat_init_ioctl(void);
+extern int pid_track_get_delay_ioctl(struct pid_track *pt);
 #endif
