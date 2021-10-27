@@ -23,270 +23,382 @@ from __future__ import print_function
 import os
 import sys
 import json
+import math
 
+
+# enable if if your kernel has this issue
+# https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3054426dc68e5d63aa6a6e9b91ac4ec78e3f3805
 g_need_sched_state_fixup = 0
+g_offset=0
+#g_offset=1634447259902797
 
 sys.path.append(os.environ['PERF_EXEC_PATH'] + \
-	'/scripts/python/Perf-Trace-Util/lib/Perf/Trace')
+  '/scripts/python/Perf-Trace-Util/lib/Perf/Trace')
 
 from perf_trace_context import *
 from Core import *
 
 _STATE_R = "Running"
 _STATE_Q = "Queuing"
-_STATE_W = "Wakeup"
+_STATE_S = "Sleeping"
+_STATE_D = "D-state"
 _STATE_I = "cpu_idle"
 
-_COLOR_Q = "terrible"	# red:    queuing
-_COLOR_R = "good"		# green:  running
-_COLOR_I = "olive"		# olive:  idle
-_COLOR_M = "yellow"		# yellow:  migration
-_COLOR_W = "thread_state_runnable"		# FIXME: set to blue:  wakeup
+_COLOR_R = "good"    # green:  running
+_COLOR_Q = "terrible"  # red:    queuing
+_COLOR_S = "olive"    # olive:  sleep
+_COLOR_D = "yellow"    # yellow: uninterruptile sleep (D state)
+_COLOR_I = "olive"    # olive:  idle
 
-# Attention: fixed 1us only for show instant event, like wakeup, migrate
-# shoule use 'I' instant event, instead of 'X' duration event,
-# The reason why we now use 'X' instead of 'I' is that 'I' event is
-# hard to see it from web browser, it nearly show a line not a rectangle.
-# 'X' show as a rectangle.
-_MARKER_DUR = 1
 _LAST_STATE = 'state'
+_LAST_COLOR = 'color'
 _LAST_EVENT = 'event'
 
 # only a fake marker, no useful
-_LAST_EVENT_DUMMY =  "dummy"
 g_pid_last_state = {}
 
+g_cpus = []
 g_event = []
 g_event_nr = 0
 
-def append_event(evt):
-	global g_event
-	global g_event_nr
-	g_event.append(evt)
-	g_event_nr += 1
+_THREAD_COMMON_PID = "tids"
+
+def append_event(evt, is_cpu_event=False):
+  global g_event
+  global g_event_nr
+  global g_cpus
+
+  if is_cpu_event:
+    cpu = evt['pid']
+    if cpu not in g_cpus:
+      g_cpus.append(cpu)
+  g_event.append(evt)
+  g_event_nr += 1
 
 def get_last_state(tid):
-	if tid in g_pid_last_state.keys():
-		# remove last state_event
-		se = g_pid_last_state.pop(tid)
-		return se
-	else:
-		return None
+  if tid in g_pid_last_state.keys():
+    # remove last state_event
+    se = g_pid_last_state.pop(tid)
+    return se
+  else:
+    return None
 
-def set_last_state(tid, state, event):
-	se = {}
-	se[_LAST_STATE] = state
-	se[_LAST_EVENT] = event
-	g_pid_last_state[tid] = se
+def set_last_state(tid, state, color, event):
+  se = {}
+  se[_LAST_STATE] = state
+  se[_LAST_COLOR] = color
+  se[_LAST_EVENT] = event
+  g_pid_last_state[tid] = se
 
 def trace_begin():
-	print("start generating trace.json")
+  print("start generating trace.json")
 
 def trace_end():
     print("finished to generate trace.json, please load it into chrome://tracing")
+    # add meta
+    for cpu in g_cpus:
+      evt = {
+        'name' : 'process_name',
+        'ph' : 'M',
+        'pid' : cpu,
+        'args' : {'name' : "CPU%02d" % int(cpu)},
+      }
+      append_event(evt)
     with open("trace.json", "w+") as f:
-        json.dump(g_event, f)
+        json.dump(g_event, f, indent=2)
 
 def sched__sched_stat_runtime(event_name, context, common_cpu,
-	common_secs, common_nsecs, common_pid, common_comm,
-	common_callchain, comm, pid, runtime, vruntime, 
-		perf_sample_dict):
-	pass
+  common_secs, common_nsecs, common_pid, common_comm,
+  common_callchain, comm, pid, runtime, vruntime, 
+    perf_sample_dict):
+  pass
 
 def sched__sched_stat_iowait(event_name, context, common_cpu,
-	common_secs, common_nsecs, common_pid, common_comm,
-	common_callchain, comm, pid, delay, perf_sample_dict):
-	pass
+  common_secs, common_nsecs, common_pid, common_comm,
+  common_callchain, comm, pid, delay, perf_sample_dict):
+  pass
 
 def sched__sched_stat_sleep(event_name, context, common_cpu,
-	common_secs, common_nsecs, common_pid, common_comm,
-	common_callchain, comm, pid, delay, perf_sample_dict):
-	pass
+  common_secs, common_nsecs, common_pid, common_comm,
+  common_callchain, comm, pid, delay, perf_sample_dict):
+  pass
 
 def sched__sched_stat_wait(event_name, context, common_cpu,
-	common_secs, common_nsecs, common_pid, common_comm,
-	common_callchain, comm, pid, delay, perf_sample_dict):
-	pass
+  common_secs, common_nsecs, common_pid, common_comm,
+  common_callchain, comm, pid, delay, perf_sample_dict):
+  pass
 
 def sched__sched_process_fork(event_name, context, common_cpu,
-	common_secs, common_nsecs, common_pid, common_comm,
-	common_callchain, parent_comm, parent_pid, child_comm, child_pid, 
-		perf_sample_dict):
-	pass
+  common_secs, common_nsecs, common_pid, common_comm,
+  common_callchain, parent_comm, parent_pid, child_comm, child_pid, 
+    perf_sample_dict):
+  pass
 
 def sched__sched_migrate_task(event_name, context, common_cpu,
-	common_secs, common_nsecs, common_pid, common_comm,
-	common_callchain, comm, pid, prio, orig_cpu, 
-	dest_cpu, perf_sample_dict):
+  common_secs, common_nsecs, common_pid, common_comm,
+  common_callchain, comm, pid, prio, orig_cpu, 
+  dest_cpu, perf_sample_dict):
 
     pass
 
-def handle_switch_prev(ts, prev_tid, prev_comm, prev_prio, cpu, prev_state):
-	last_state_event = get_last_state(prev_tid + prev_comm)
-	if last_state_event:
-		last_state = last_state_event[_LAST_STATE]
-		last_event = last_state_event[_LAST_EVENT]
-		# if no last_state, that means this is the first event of this tid,
-		# just save it's state
-		# if last_state is R, record the end of this tid
-		if last_state == _STATE_R:
-			# prev
-			if prev_tid != "0":
-				color = _COLOR_R
-				name = _STATE_R
-			else:
-				color = _COLOR_I
-				name = _STATE_I
-			dur = ts - last_event['ts']
-			if dur > 0:
-				tmp = {
-					"name"  : name,
-					"pid"   : cpu,
-					"tid"  : "%s prio:%s %s" % (prev_tid, prev_prio, prev_comm),
-					"ph"   : "X",
-					"ts"   : last_event['ts'],
-					"dur"  : dur,
-					"cname" : color,
-				}
-				append_event(tmp)
+def handle_switch_prev(ts, prev_tid, prev_comm, prev_prio, cpu, prev_state_str):
+  last_state_event = get_last_state(prev_tid + prev_comm)
+  if last_state_event:
+    last_state = last_state_event[_LAST_STATE]
+    last_color = last_state_event[_LAST_COLOR]
+    last_event = last_state_event[_LAST_EVENT]
+    last_ts = last_event['ts']
+    dur = ts - last_ts
+    # if no last_state, that means this is the first event of this tid,
+    # just save it's state
+    # if last_state is R, record the end of this tid
+    # add cpu event
+    if dur > 0 and last_state == _STATE_R:
+      # prev
+      if prev_tid != "0":
+        color = _COLOR_R
+        name = _STATE_R
+      else:
+        color = _COLOR_I
+        name = _STATE_I
+      # add cpu event
+      tmp = {
+        "name"  : name,
+        "pid"   : cpu,
+        "tid"  : prev_tid,
+        "ph"   : "X",
+        "ts"   : last_ts,
+        "dur"  : dur,
+        "cname"  : color,
+        "args" : {
+          "UTC" : last_ts,
+          "kernel" : float("%d.%06d" % ((last_ts-g_offset)//100000, (last_ts-g_offset)%1000000)),
+          "prio" : int(prev_prio),
+          "comm" : prev_comm,
+        },
+      }
+      append_event(tmp, True)
 
-	# if prev_sate is R, it enter Q state
-	if prev_state.startswith("R"):
-		if prev_tid != "0":
-			prev_out2 = {
-				"name"  : _STATE_Q,
-				"pid"   : cpu,
-				"tid"  : "%s prio:%s %s" % (prev_tid, prev_prio, prev_comm),
-				"ph"   : "B",
-				"ts"   : ts,
-				"cname" : _COLOR_Q,
-			}
-			set_last_state(prev_tid + prev_comm, _STATE_Q, prev_out2)
-	else:
-		if prev_tid != "0":
-			set_last_state(prev_tid + prev_comm, prev_state, _LAST_EVENT_DUMMY)
+    # add thread event
+    # do not record tid=0's event for thread event
+    if dur > 0 and prev_tid != "0":
+      tmp = {
+        "name"  : last_state,
+        "pid"	: _THREAD_COMMON_PID,
+        "tid"	: prev_tid,
+        "ts"	: last_ts,
+        "ph"	: "X",
+        "dur"	: dur,
+        "cname" : last_color,
+        "args" : {
+          "UTC" : last_ts,
+          "kernel" : float("%d.%06d" % ((last_ts-g_offset)//100000, (last_ts-g_offset)%1000000)),
+          "prio" : int(prev_prio),
+          "comm" : prev_comm,
+        },
+      }
+      append_event(tmp)
 
+  # if prev_sate is R, it enter Q state
+  if prev_state_str == 'R':
+    state = _STATE_Q
+    color = _COLOR_Q
+  elif prev_state_str == 'S':
+    state = _STATE_S
+    color = _COLOR_S
+  elif prev_state_str == 'D':
+    state = _STATE_D
+    color = _COLOR_D
+  elif prev_state_str == 'I':
+    # not handle TASK_DEAD event
+    return
+  else:
+    print("Ignore prev_state:%s" % prev_state)
+    #raise ValueError("Invalid prev_state:%s" % prev_state)
+    return
+
+  tmp = {
+    "ts"   : ts,
+  }
+  set_last_state(prev_tid + prev_comm, state, color, tmp)
 
 def handle_switch_next(ts, next_tid, next_comm, next_prio, cpu):
-	# get last state of this thread, if Q add a end of Q, otherwise do nothing
-	last_state_event = get_last_state(next_tid + next_comm)
-	if last_state_event:
-		last_state = last_state_event[_LAST_STATE]
-		last_event = last_state_event[_LAST_EVENT]
+  # get last state of this thread, if Q add a end of Q, otherwise do nothing
+  last_state_event = get_last_state(next_tid + next_comm)
+  if last_state_event:
+    last_state = last_state_event[_LAST_STATE]
+    last_color = last_state_event[_LAST_COLOR]
+    last_event = last_state_event[_LAST_EVENT]
+
+    last_ts = last_event['ts']
+    dur = ts - last_ts
 # the reason why check dur (ts -  last_event['ts']) > 0 is that, wakeup.ts = sched_switch.ts
 # basler_camera 21275 [000]  9113.673906:       sched:sched_wakeup: comm=basler_camera pid=21935 prio=120 target_cpu=000
 # basler_camera 21275 [000]  9113.673906:       sched:sched_switch: prev_comm=basler_camera prev_pid=21275 prev_prio=120 prev_state=R ==> next_comm=basler_camera next_pid=21935 next_prio=120
-		if last_state == _STATE_Q:
-			dur = ts - last_event['ts']
-			if dur > 0:
-				tmp = {
-					"name"  : last_state,
-					"pid"   : cpu,
-					"tid"  : "%s prio:%s %s" % (next_tid, next_prio, next_comm),
-					"ph"   : "X",
-					"ts"   : last_event['ts'],
-					"dur"  : dur,
-					"cname" : _COLOR_Q,
-				}
-				append_event(tmp)
+    # add cpu event
+    if dur > 0 and last_state == _STATE_Q:
+      tmp = {
+        "name"  : last_state,
+        "pid"   : cpu,
+        "tid"  : next_tid,
+        "ph"   : "X",
+        "ts"   : last_ts,
+        "dur"  : dur,
+        "cname" : _COLOR_Q,
+        "args" : {
+          "UTC" : last_ts,
+          "kernel" : float("%d.%06d" % ((last_ts-g_offset)//100000, (last_ts-g_offset)%1000000)),
+          "prio" : int(next_prio),
+          "comm" : next_comm,
+        },
+      }
+      append_event(tmp, True)
+    # add thread event
+    # add thread event
+    # do not record tid=0's event for thread event
+    if dur > 0 and next_tid != "0":
+      tmp = {
+        "name"  : last_state,
+        "pid"	: _THREAD_COMMON_PID,
+        "tid"	: next_tid,
+        "ts"	: last_ts,
+        "ph"	: "X",
+        "dur"	: dur,
+        "cname" : last_color,
+        "args" : {
+          "UTC" : last_ts,
+          "kernel" : float("%d.%06d" % ((last_ts-g_offset)//100000, (last_ts-g_offset)%1000000)),
+          "prio" : int(next_prio),
+          "comm" : next_comm,
+        },
+      }
+      append_event(tmp)
 
-	if next_tid != "0":
-		color = _COLOR_R
-	else:
-		color = _COLOR_I
-	next_out2 = {
-		"name"  : _STATE_R,
-		"pid"   : cpu,
-		"tid"  : "%s prio:%s %s" % (next_tid, next_prio, next_comm),
-		"ph"   : "B",
-		"ts"   : ts,
-		"cname" : color,
-	}
-	set_last_state(next_tid + next_comm, _STATE_R, next_out2)
+  tmp = {
+    "ts"   : ts,
+  }
+  set_last_state(next_tid + next_comm, _STATE_R, _COLOR_R, tmp)
 
-def get_state_str(prev_state):
-    sched_state_fixup = {
-        'S'  : 'R',
-        'D'  : 'S',
-        'T'  : 'D',
-        't'  : 'T',
-        'X'  : 't',
-        'Z'  : 'X',
-        'P'  : 'Z',
-        'I'  : 'P',
-        'R+' : 'I',
-    }
-    state_str = flag_str("sched__sched_switch", "prev_state", prev_state)
-    if g_need_sched_state_fixup:
-        state_str = sched_state_fixup[state_str]
+#/* Used in tsk->state: */
+TASK_RUNNING          = 0x0000
+TASK_INTERRUPTIBLE    = 0x0001
+TASK_UNINTERRUPTIBLE  = 0x0002
+__TASK_STOPPED        = 0x0004
+__TASK_TRACED         = 0x0008
+EXIT_DEAD             = 0x0010
+EXIT_ZOMBIE           = 0x0020
+TASK_PARKED           = 0x0040
+TASK_DEAD             = 0x0080
+TASK_STATE_MAX        = 0x1000
+TASK_STATE_WRONG = 'WRONG'
 
-    return state_str
+def get_state_str(ts, prev_tid, prev_state):
+  old_state = prev_state
+  sched_state_str = {
+    TASK_RUNNING          : 'R',
+    TASK_INTERRUPTIBLE    : 'S',
+    TASK_UNINTERRUPTIBLE  : 'D',
+    __TASK_STOPPED        : 'T',
+    __TASK_TRACED         : 't',
+    EXIT_DEAD             : 'X',
+    EXIT_ZOMBIE           : 'Z',
+    TASK_PARKED           : 'P',
+    TASK_DEAD             : 'I',
+  }
+
+  # https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3054426dc68e5d63aa6a6e9b91ac4ec78e3f3805
+  if g_need_sched_state_fixup:
+    fls = int(math.log(prev_state, 2))
+    if fls > 0:
+      prev_state = 1 << (fls - 1)
+    else:
+      prev_state = 0
+
+  if prev_state not in sched_state_str.keys():
+    return TASK_STATE_WRONG
+
+  return sched_state_str[prev_state]
 
 def sched__sched_switch(event_name, context, common_cpu,
-	common_secs, common_nsecs, common_pid, common_comm,
-	common_callchain, prev_comm, prev_pid, prev_prio, prev_state, 
-	next_comm, next_pid, next_prio, perf_sample_dict):
+  common_secs, common_nsecs, common_pid, common_comm,
+  common_callchain, prev_comm, prev_pid, prev_prio, prev_state, 
+  next_comm, next_pid, next_prio, perf_sample_dict):
 
     # convert to us
     ts = int(common_secs * 1000000 + common_nsecs / 1000)
+    ts += g_offset
     prev_tid = str(prev_pid)
     next_tid = str(next_pid)
-    prev_state_str = get_state_str(prev_state)
+    prev_state_str = get_state_str(ts, prev_tid, prev_state)
+    if prev_state_str == TASK_STATE_WRONG:
+      print("NOT expect prev_state", prev_state, 'args', event_name, common_cpu, common_secs, common_nsecs)
+      raise ValueError("Invalid prev_state:0x%x" % prev_state)
     handle_switch_prev(ts, prev_tid, prev_comm, prev_prio, common_cpu, prev_state_str)
     handle_switch_next(ts, next_tid, next_comm, next_prio, common_cpu)
 
 def handle_wakeup(ts, comm, tid, prio, target_cpu):
-    if tid != "0":
-        # chrome tracing format
-        tmp = {
-            "name"  : _STATE_Q,
-            "pid"  : target_cpu,
-            "tid"  : "%s prio:%s %s" % (tid, prio, comm),
-            "ph"   : "B",
-            "ts"   : ts,
-            "cname" : _COLOR_Q,
-        }
-        set_last_state(tid + comm, _STATE_Q, tmp)
-		# add marker for wakup
-        wake = {
-            "name"  : _STATE_W,
-            "pid"   : target_cpu,
-            "tid"  : "%s prio:%s %s" % (tid, prio, comm),
-            "ph"   : "X",
-            "s"    : "t",
-            "ts"   : ts - _MARKER_DUR,
-            "dur"  : _MARKER_DUR,
-            "cname" : _COLOR_W,
-        }
-        append_event(wake)
+  last_state_event = get_last_state(tid + comm)
+  if last_state_event:
+    last_state = last_state_event[_LAST_STATE]
+    last_color = last_state_event[_LAST_COLOR]
+    last_event = last_state_event[_LAST_EVENT]
+
+    last_ts = last_event['ts']
+    dur = ts - last_ts
+    # add thread event
+    # do not record tid=0's event for thread event
+    if dur > 0 and tid != "0":
+      tmp = {
+        "name"  : last_state,
+        "pid"	: _THREAD_COMMON_PID,
+        "tid"	: tid,
+        "ts"	: last_ts,
+        "ph"	: "X",
+        "dur"	: dur,
+        "cname" : last_color,
+        "args" : {
+          "UTC" : last_ts,
+          "kernel" : float("%d.%06d" % ((last_ts-g_offset)//100000, (last_ts-g_offset)%1000000)),
+          "prio" : int(prio),
+          "comm" : comm,
+        },
+      }
+      append_event(tmp)
+  # chrome tracing format
+  tmp = {
+    "ts"   : ts,
+  }
+  set_last_state(tid + comm, _STATE_Q, _COLOR_Q, tmp)
 
 def sched__sched_wakeup_new(event_name, context, common_cpu,
-	common_secs, common_nsecs, common_pid, common_comm,
-	common_callchain, comm, pid, prio, success, 
-	target_cpu, perf_sample_dict):
+  common_secs, common_nsecs, common_pid, common_comm,
+  common_callchain, comm, pid, prio, success, 
+  target_cpu, perf_sample_dict):
 
     # convert to us
     ts = int(common_secs * 1000000 + common_nsecs / 1000)
+    ts += g_offset
     tid = str(pid)
     handle_wakeup(ts, comm, tid, prio, target_cpu)
 
 def sched__sched_wakeup(event_name, context, common_cpu,
-	common_secs, common_nsecs, common_pid, common_comm,
-	common_callchain, comm, pid, prio, success, 
-	target_cpu, perf_sample_dict):
+  common_secs, common_nsecs, common_pid, common_comm,
+  common_callchain, comm, pid, prio, success, 
+  target_cpu, perf_sample_dict):
 
     # convert to us
     ts = int(common_secs * 1000000 + common_nsecs / 1000)
+    ts += g_offset
     tid = str(pid)
     handle_wakeup(ts, comm, tid, prio, target_cpu)
 
 def trace_unhandled(event_name, context, event_fields_dict, perf_sample_dict):
-		print(get_dict_as_string(event_fields_dict))
-		print('Sample: {'+get_dict_as_string(perf_sample_dict['sample'], ', ')+'}')
+    print(get_dict_as_string(event_fields_dict))
+    print('Sample: {'+get_dict_as_string(perf_sample_dict['sample'], ', ')+'}')
 
 def print_header(event_name, cpu, secs, nsecs, pid, comm):
-	print("%-20s %5u %05u.%09u %8u %-20s " % \
-	(event_name, cpu, secs, nsecs, pid, comm), end="")
+  print("%-20s %5u %05u.%09u %8u %-20s " % \
+  (event_name, cpu, secs, nsecs, pid, comm), end="")
 
 def get_dict_as_string(a_dict, delimiter=' '):
-	return delimiter.join(['%s=%s'%(k,str(v))for k,v in sorted(a_dict.items())])
+  return delimiter.join(['%s=%s'%(k,str(v))for k,v in sorted(a_dict.items())])
