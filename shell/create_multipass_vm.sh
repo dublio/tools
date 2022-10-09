@@ -45,7 +45,7 @@ echo "disk(G):    ${DISK_GB}"
 read -p "Configuration is right and continue to create VM(yN) ?" r
 if [ x"$r" == xy ]; then
 	echo "Start create VM...."
-#multipass launch -n t220401 -d 80G -m 16G -c 16 22.04
+	multipass launch -n ${HOST_NAME} -d ${DISK_GB}G -m ${MEM_GB}G -c ${CPU_NR} ${UBUNTU_RELEASE}
 	echo "Finish create VM, please login it by the following command:"
 	echo "multipass shell ${HOST_NAME}"
 else
