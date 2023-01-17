@@ -28,12 +28,25 @@ static char func[KSYM_NAME_LEN];
 module_param_string(func, func, sizeof(func), 0644);
 static unsigned int offset;
 module_param(offset, uint, 0644);
+
+/* enable/disable dump_stack */
 static bool show_stack = false;
 module_param(show_stack, bool, 0644);
 
+/* use printk by defaut, disable it if needed */
+static bool printk = true;
+module_param(printk, bool, 0644);
+
+/* enable/disable trace_printk */
+static bool trace_printk = false;
+module_param(trace_printk, bool, 0644);
+
 static int kpre_handler(struct kprobe *p, struct pt_regs *regs)
 {
-	pr_err("kprobe hit: %s+0x%x comm: %s tid: %d\n", func, offset, current->comm, current->pid);
+	if (trace_printk)
+		trace_printk("kprobe hit: %s+0x%x comm: %s tid: %d\n", func, offset, current->comm, current->pid);
+	if (printk)
+		pr_err("kprobe hit: %s+0x%x comm: %s tid: %d\n", func, offset, current->comm, current->pid);
 	if (show_stack)
 		dump_stack();
 	return 0;
